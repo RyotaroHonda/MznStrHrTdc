@@ -246,6 +246,7 @@ architecture Behavioral of toplevel is
   -- DCT ---------------------------------------------------------------------
   signal ddr_test_mode_lbus     : std_logic;
   signal ddr_test_mode          : std_logic;
+  signal test_mode              : std_logic;
   signal extra_path             : std_logic;
 
   -- StrTDC ------------------------------------------------------------------
@@ -384,7 +385,8 @@ begin
   ENFIN       <= '1';
 
   -- System ------------------------------------------------------------------
-  ready_clk     <= and_reduce(clk_miku_locked);
+  --ready_clk     <= and_reduce(clk_miku_locked);
+  ready_clk     <= clk_miku_locked(0);
   system_reset  <= (NOT ready_clk) or force_reset;
   pwr_on_reset  <= (NOT clk_sys_locked) or force_reset;
   user_reset    <= system_reset OR rst_from_bus;
@@ -721,9 +723,7 @@ begin
       );
   end generate;
 
-  gen_input_assign : for i in 0 to kNumInput-1 generate
-    sig_in(i)   <= clk_calib when(extra_path = '1') else detector_in(i);
-  end generate;
+  sig_in  <= detector_in;
 
   u_SyncHbfMismatch : entity mylib.synchronizer
     port map(clk_sys, hbfnum_mismatch, sync_lhbfnum_mismatch );
@@ -747,7 +747,8 @@ begin
       radiationURE      => uncorrectable_flag,
       daqOn             => daq_is_runnig,
       scrThrEn          => scr_thr_on,
-      hitOut            => hit_out,
+
+      testModeIn        => extra_path,
 
       -- Data Link --------------------------------------------------
       linkActive        => tcp_is_active,
@@ -769,7 +770,9 @@ begin
 
       -- Streaming TDC interface ------------------------------------
       sigIn             => sig_in,
+      calibIn           => clk_calib,
       triggerIn         => strtdc_trigger_in,
+      hitOut            => hit_out,
 
       dataRdEn          => strtdc_rden,
       dataOut           => strtdc_dout,
@@ -904,7 +907,7 @@ begin
 
       -- Module Output --
       regTestMode       => ddr_test_mode,
-      regExtraPath      => extra_path,
+      regExtraPath      => test_mode,
 
       -- Local bus --
       addrLocalBus      => addr_LocalBus,
@@ -993,27 +996,29 @@ begin
   u_clk_calib1 : clk_wiz_calib1
     port map(
       clk_calib1      => clk_512,
-      reset           => '0',
+      reset           => (not test_mode),
       locked          => clk_miku_locked(1),
-      clk_in1         => clk_icap
+      clk_in1         => clk_idelayref
       );
 
   u_clk_calib2 : clk_wiz_calib2
     port map(
       clk_calib2      => clk_26214,
 --      clk_calib2      => clk_calib,
-      reset           => '0',
+      reset           => (not test_mode),
       locked          => clk_miku_locked(2),
       clk_in1         => clk_512
       );
 
 --    clk_calib   <= clk_26214;
+   extra_path <= clk_miku_locked(1) and clk_miku_locked(2);
 
-   u_div3_1 : entity mylib.ClkDivision3
+   --u_div3_1 : entity mylib.ClkDivision3
+   u_div3_1 : entity mylib.Division10
      port map(
-       RST       => system_reset,
+       RST       => (not extra_path),
        CLK       => clk_26214,
-       Q         => clk_calib
+       clkDiv10  => clk_calib
        );
 
 end Behavioral;
