@@ -154,6 +154,7 @@ proc checkRequiredFiles { origin_dir} {
  "[file normalize "$origin_dir/ip/ddr_oserdes/ddr_oserdes.xci"]"\
  "[file normalize "$origin_dir/ip/ddr_oserdes_clk_fwd/ddr_oserdes_clk_fwd.xci"]"\
  "[file normalize "$origin_dir/ip/mergerFrontFifo/mergerFrontFifo.xci"]"\
+ "[file normalize "$origin_dir/ip/mergerBackFifo/mergerBackFifo.xci"]"\
  "[file normalize "$origin_dir/ip/incomingFifo/incomingFifo.xci"]"\
  "[file normalize "$origin_dir/ip/dram_FineCountLUT/dram_FineCountLUT.xci"]"\
  "[file normalize "$origin_dir/ip/finecount_bram/finecount_bram.xci"]"\
@@ -386,6 +387,7 @@ set files [list \
  [file normalize "${origin_dir}/ip/ddr_oserdes/ddr_oserdes.xci"] \
  [file normalize "${origin_dir}/ip/ddr_oserdes_clk_fwd/ddr_oserdes_clk_fwd.xci"] \
  [file normalize "${origin_dir}/ip/mergerFrontFifo/mergerFrontFifo.xci"] \
+ [file normalize "${origin_dir}/ip/mergerBackFifo/mergerBackFifo.xci"] \
  [file normalize "${origin_dir}/ip/incomingFifo/incomingFifo.xci"] \
  [file normalize "${origin_dir}/ip/dram_FineCountLUT/dram_FineCountLUT.xci"] \
  [file normalize "${origin_dir}/ip/finecount_bram/finecount_bram.xci"] \
@@ -569,6 +571,16 @@ if { ![get_property "is_locked" $file_obj] } {
 }
 
 set file "$origin_dir/ip/mergerFrontFifo/mergerFrontFifo.xci"
+set file [file normalize $file]
+set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
+set_property -name "generate_files_for_reference" -value "0" -objects $file_obj
+set_property -name "library" -value "mylib" -objects $file_obj
+set_property -name "registered_with_manager" -value "1" -objects $file_obj
+if { ![get_property "is_locked" $file_obj] } {
+  set_property -name "synth_checkpoint_mode" -value "Singular" -objects $file_obj
+}
+
+set file "$origin_dir/ip/mergerBackFifo/mergerBackFifo.xci"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
 set_property -name "generate_files_for_reference" -value "0" -objects $file_obj
@@ -855,7 +867,7 @@ set_property -name "library" -value "mylib" -objects $file_obj
 set file "$origin_dir/hdl/strtdc/hrtdc-impl/mezzanine/odpblock/hrtdc/TappedDelayLineV2.vhd"
 set file [file normalize $file]
 set file_obj [get_files -of_objects [get_filesets sources_1] [list "*$file"]]
-set_property -name "file_type" -value "VHDL" -objects $file_obj
+set_property -name "file_type" -value "VHDL 2008" -objects $file_obj
 set_property -name "library" -value "mylib" -objects $file_obj
 
 set file "$origin_dir/hdl/strtdc/hrtdc-impl/mezzanine/odpblock/hrtdc/RemappingTapsV3.vhd"

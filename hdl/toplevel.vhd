@@ -93,7 +93,7 @@ end toplevel;
 architecture Behavioral of toplevel is
   attribute mark_debug  : string;
   attribute keep        : string;
-  constant kEnDebugTop  : string:= "true";
+  constant kEnDebugTop  : string:= "false";
 
   -- System ------------------------------------------------------------------
   -- Mezzanine specification
@@ -113,7 +113,6 @@ architecture Behavioral of toplevel is
   signal prog_full_bmgr, sync_prog_full_bmgr    : std_logic;
   signal hbfnum_mismatch, sync_lhbfnum_mismatch  : std_logic;
   signal tcp_is_active      : std_logic;
-  signal empty_link_buf     : std_logic;
   signal output_throttling_on : std_logic;
 
   -- Hit Input definition --
@@ -274,6 +273,36 @@ architecture Behavioral of toplevel is
   attribute mark_debug of strtdc_dout           : signal is kEnDebugTop;
   attribute mark_debug of sync_prog_full_bmgr   : signal is kEnDebugTop;
 
+  -- VitalBlock output --
+  signal vital_rden         : std_logic;
+  signal vital_dout         : std_logic_vector(kWidthData-1 downto 0);
+  signal vital_valid        : std_logic;
+
+  -- Link buffer --
+  signal pfull_link_buf     : std_logic;
+  signal empty_link_buf     : std_logic;
+
+  component mergerBackFifo is
+    PORT(
+      clk         : in  STD_LOGIC;
+      srst        : in  STD_LOGIC;
+
+      wr_en       : in  STD_LOGIC;
+      din         : in  STD_LOGIC_VECTOR (kWidthData-1 DOWNTO 0);
+      full        : out STD_LOGIC;
+      almost_full : out STD_LOGIC;
+
+      rd_en       : in  STD_LOGIC;
+      dout        : out STD_LOGIC_VECTOR (kWidthData-1 DOWNTO 0);
+      empty       : out STD_LOGIC;
+      almost_empty: out STD_LOGIC;
+      valid       : out STD_LOGIC;
+
+      prog_full   : out STD_LOGIC
+    );
+    end component;
+
+
   -- SDS --------------------------------------------------------------------
   signal uncorrectable_flag     : std_logic;
 
@@ -391,12 +420,12 @@ begin
   pwr_on_reset  <= (NOT clk_sys_locked) or force_reset;
   user_reset    <= system_reset OR rst_from_bus;
 
-  status_mzn(kIdMznInThrottlingT2)    <= input_throttling_t2_on;
+  status_mzn(kIdMznInThrottlingT2)    <= '0';
   prog_full_bmgr                      <= status_base(kIdBaseProgFullBMgr);
   hbfnum_mismatch                     <= status_base(kIdBaseHbfNumMismatch);
   tcp_is_active                       <= status_base(kIdBaseTcpActive);
-  empty_link_buf                      <= status_base(kIdBaseEmptyLinkBuf);
-  output_throttling_on                <= status_base(kIdBaseOutThrottling);
+  --empty_link_buf                      <= status_base(kIdBaseEmptyLinkBuf);
+  --output_throttling_on                <= status_base(kIdBaseOutThrottling);
 
   -- MIKUMARI ----------------------------------------------------------------
   u_KeepInit : process(system_reset, clk_sys)
@@ -733,6 +762,7 @@ begin
   u_StrHrTdc : entity mylib.StrHrTdc
     generic map(
       kNumInput         => kNumInput,
+      kDivisionRatio    => 4,
       enDEBUG           => false
     )
     port map(
@@ -755,9 +785,6 @@ begin
 
       -- DAQ status ------------------------------------------------
       lHbfNumMismatch   => sync_lhbfnum_mismatch,
-      inThrottlingT2On  => input_throttling_t2_on,
-      outThrottlingOn   => output_throttling_on,
-      emptyLinkInBufIn  => empty_link_buf,
 
       -- LACCP ------------------------------------------------------
       heartbeatIn       => heartbeat_signal,
@@ -772,12 +799,16 @@ begin
       sigIn             => sig_in,
       calibIn           => clk_calib,
       triggerIn         => strtdc_trigger_in,
-      hitOut            => hit_out,
 
-      dataRdEn          => strtdc_rden,
-      dataOut           => strtdc_dout,
-      dataEmpty         => strtdc_empty,
-      dataRdValid       => strtdc_rdvalid,
+
+      dataRdEn          => vital_rden,
+      dataOut           => vital_dout,
+--      dataEmpty         => strtdc_empty,
+      dataRdValid       => vital_valid,
+
+      -- LinkBuffer interface ---------------------------------------
+      pfullLinkBufIn    => pfull_link_buf,
+      emptyLinkInBufIn  => empty_link_buf,
 
       -- Local bus --
       addrLocalBus      => addr_LocalBus,
@@ -788,9 +819,30 @@ begin
       readyLocalBus     => ready_LocalBus(kTDC.ID)
     );
 
+  vital_rden  <= not pfull_link_buf;
+
   u_SyncPFull : entity mylib.synchronizer
     port map(clk_sys, prog_full_bmgr, sync_prog_full_bmgr );
-  strtdc_rden   <= not (strtdc_empty or sync_prog_full_bmgr) ;
+  strtdc_rden   <= not (sync_prog_full_bmgr) ;
+
+  u_link_buf : mergerBackFifo
+    port map(
+    clk         => clk_sys,
+    srst        => user_reset or (not tcp_is_active),
+
+    wr_en       => vital_valid,
+    din         => vital_dout,
+    full        => open,
+    almost_full => open,
+
+    rd_en       => strtdc_rden,
+    dout        => strtdc_dout,
+    empty       => empty_link_buf,
+    almost_empty=> open,
+    valid       => strtdc_rdvalid,
+
+    prog_full   => pfull_link_buf
+  );
 
 
   -- MZN connector -----------------------------------------------------------
@@ -1013,12 +1065,12 @@ begin
 --    clk_calib   <= clk_26214;
    extra_path <= clk_miku_locked(1) and clk_miku_locked(2);
 
-   --u_div3_1 : entity mylib.ClkDivision3
-   u_div3_1 : entity mylib.Division10
+   u_div3_1 : entity mylib.ClkDivision3
+--   u_div3_1 : entity mylib.Division10
      port map(
        RST       => (not extra_path),
        CLK       => clk_26214,
-       clkDiv10  => clk_calib
+       Q         => clk_calib
        );
 
 end Behavioral;
