@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 
 package defBusAddressMap is
 
-  constant kCurrentVersion      : std_logic_vector(31 downto 0):= x"804c0202";
+  constant kCurrentVersion      : std_logic_vector(31 downto 0):= x"804c0203";
   constant kNumModules          : natural:= 5;
 
   constant kWidthModuleID       : positive:=4;
