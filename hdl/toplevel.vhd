@@ -225,7 +225,7 @@ architecture Behavioral of toplevel is
 
   -- Scaler -------------------------------------------------------------------
   constant kMsbScr      : integer:= kNumSysInput+kNumInput-1;
-  signal scr_en_in      : std_logic_vector(kMsbScr downto 0);
+  signal scr_en_in      : std_logic_vector(kMsbScr downto 0):= (others => '0');
 
   -- MZN connector -----------------------------------------------------------
   -- DDR transmitter --
@@ -714,6 +714,9 @@ begin
   scr_en_in(kMsbScr - kIndexHbfThrotTime)   <= scr_thr_on(4);
   scr_en_in(kMsbScr - kIndexMikuError)      <= (pattern_error(kIdMikuSec) or checksum_err(kIdMikuSec) or frame_broken(kIdMikuSec) or recv_terminated(kIdMikuSec)) and is_ready_for_daq(kIdMikuSec);
 
+  scr_en_in(kMsbScr - kIndexTrgReq)         <= '0';
+  scr_en_in(kMsbScr - kIndexTrgRejected)    <= '0';
+
   scr_en_in(kNumInput-1 downto 0)           <= swap_vect(hit_out);
 
   u_SCR: entity mylib.FreeRunScaler
@@ -799,7 +802,7 @@ begin
       sigIn             => sig_in,
       calibIn           => clk_calib,
       triggerIn         => strtdc_trigger_in,
-
+      hitOut            => hit_out,
 
       dataRdEn          => vital_rden,
       dataOut           => vital_dout,
