@@ -115,6 +115,8 @@ architecture Behavioral of toplevel is
   signal tcp_is_active      : std_logic;
   signal output_throttling_on : std_logic;
 
+  signal frame_flag_out   : std_logic_vector(kWidthFrameFlag-1 downto 0);
+
   -- Hit Input definition --
   constant kNumInput    : integer:= 32;
 
@@ -226,6 +228,7 @@ architecture Behavioral of toplevel is
   -- Scaler -------------------------------------------------------------------
   constant kMsbScr      : integer:= kNumSysInput+kNumInput-1;
   signal scr_en_in      : std_logic_vector(kMsbScr downto 0):= (others => '0');
+  signal scr_gate       : std_logic_vector(kNumScrGate-1 downto 0);
 
   -- MZN connector -----------------------------------------------------------
   -- DDR transmitter --
@@ -657,6 +660,9 @@ begin
         forceOn           => '1',
         frameState        => hbf_state,
 
+        hbfFlagsIn        => (others => '0'),
+        frameFlags        => frame_flag_out,
+
         -- LACCP Bus --
         dataBusIn         => data_laccp_intra_out(GetExtIntraIndex(kPortHBU)),
         validBusIn        => valid_laccp_intra_out(GetExtIntraIndex(kPortHBU)),
@@ -669,12 +675,15 @@ begin
   -- MIKUMARI utility ---------------------------------------------------------------------
   u_MUTIL : entity mylib.MikumariUtil
     generic map(
-      kNumMikumari => kNumMikumari
+      kNumMikumari => kNumMikumari,
+      kSecondaryId => kIdMikuSec
     )
     port map(
       -- System ----------------------------------------------------
       rst               => user_reset,
       clk               => clk_sys,
+
+      clockRootMode     => '0',
 
       -- CBT status ports --
       cbtLaneUp           => cbt_lane_up,
@@ -717,7 +726,24 @@ begin
   scr_en_in(kMsbScr - kIndexTrgReq)         <= '0';
   scr_en_in(kMsbScr - kIndexTrgRejected)    <= '0';
 
+  scr_en_in(kMsbScr - kIndexGate1Time)      <= heartbeat_signal and scr_gate(1);
+  scr_en_in(kMsbScr - kIndexGate2Time)      <= heartbeat_signal and scr_gate(2);
+
   scr_en_in(kNumInput-1 downto 0)           <= swap_vect(hit_out);
+
+  scr_gate(0)   <= '1';
+  process(clk_sys)
+  begin
+    if(clk_sys'event and clk_sys = '1') then
+      if(user_reset = '1') then
+        scr_gate(kNumScrGate-1 downto 1)  <= (others => '0');
+      elsif(heartbeat_signal = '1') then
+        scr_gate(1)   <= frame_flag_out(0);
+        scr_gate(2)   <= frame_flag_out(1);
+      end if;
+    end if;
+  end process;
+
 
   u_SCR: entity mylib.FreeRunScaler
     generic map(
@@ -733,6 +759,8 @@ begin
       hbCount             => (heartbeat_count'range => heartbeat_count, others => '0'),
       hbfNum              => (hbf_number'range => hbf_number, others => '0'),
       scrEnIn             => scr_en_in,
+
+      scrGates            => scr_gate,
 
       -- Local bus --
       addrLocalBus        => addr_LocalBus,
@@ -797,6 +825,8 @@ begin
       hbfState          => hbf_state,
 
       LaccpFineOffset   => laccp_fine_offset,
+
+      frameFlagsIn      => frame_flag_out,
 
       -- Streaming TDC interface ------------------------------------
       sigIn             => sig_in,
