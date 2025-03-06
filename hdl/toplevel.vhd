@@ -110,8 +110,8 @@ architecture Behavioral of toplevel is
   signal status_mzn   : std_logic_vector(kWidthStatusMzn-1 downto 0);
   signal status_base  : std_logic_vector(kWidthStatusBase-1 downto 0);
 
-  signal prog_full_bmgr, sync_prog_full_bmgr    : std_logic;
-  signal hbfnum_mismatch, sync_lhbfnum_mismatch  : std_logic;
+  signal prog_full_bmgr     : std_logic;
+  signal hbfnum_mismatch    : std_logic;
   signal tcp_is_active      : std_logic;
   signal output_throttling_on : std_logic;
 
@@ -257,6 +257,7 @@ architecture Behavioral of toplevel is
   signal hit_out        : std_logic_vector(kNumInput-1 downto 0):= (others => '0');
   signal scr_thr_on     : std_logic_vector(kNumScrThr-1 downto 0);
   signal daq_is_runnig  : std_logic;
+  signal recovery_rst   : std_logic;
 
   signal strtdc_trigger_in  : std_logic;
 
@@ -274,7 +275,7 @@ architecture Behavioral of toplevel is
   attribute mark_debug of strtdc_rden           : signal is kEnDebugTop;
   attribute mark_debug of strtdc_rdvalid        : signal is kEnDebugTop;
   attribute mark_debug of strtdc_dout           : signal is kEnDebugTop;
-  attribute mark_debug of sync_prog_full_bmgr   : signal is kEnDebugTop;
+  attribute mark_debug of prog_full_bmgr        : signal is kEnDebugTop;
 
   -- VitalBlock output --
   signal vital_rden         : std_logic;
@@ -423,7 +424,7 @@ begin
   pwr_on_reset  <= (NOT clk_sys_locked) or force_reset;
   user_reset    <= system_reset OR rst_from_bus;
 
-  status_mzn(kIdMznInThrottlingT2)    <= '0';
+  status_mzn(kIdMznRecoveryRst)       <= recovery_rst;
   prog_full_bmgr                      <= status_base(kIdBaseProgFullBMgr);
   hbfnum_mismatch                     <= status_base(kIdBaseHbfNumMismatch);
   tcp_is_active                       <= status_base(kIdBaseTcpActive);
@@ -785,9 +786,6 @@ begin
 
   sig_in  <= detector_in;
 
-  u_SyncHbfMismatch : entity mylib.synchronizer
-    port map(clk_sys, hbfnum_mismatch, sync_lhbfnum_mismatch );
-
   strtdc_trigger_in <= laccp_pulse_out(kDownPulseTrigger);
 
   u_StrHrTdc : entity mylib.StrHrTdc
@@ -815,7 +813,8 @@ begin
       linkActive        => tcp_is_active,
 
       -- DAQ status ------------------------------------------------
-      lHbfNumMismatch   => sync_lhbfnum_mismatch,
+      lHbfNumMismatch   => hbfnum_mismatch,
+      recoveryRstOut    => recovery_rst,
 
       -- LACCP ------------------------------------------------------
       heartbeatIn       => heartbeat_signal,
@@ -854,14 +853,12 @@ begin
 
   vital_rden  <= not pfull_link_buf;
 
-  u_SyncPFull : entity mylib.synchronizer
-    port map(clk_sys, prog_full_bmgr, sync_prog_full_bmgr );
-  strtdc_rden   <= not (sync_prog_full_bmgr) ;
+  strtdc_rden   <= not (prog_full_bmgr) ;
 
   u_link_buf : mergerBackFifo
     port map(
     clk         => clk_sys,
-    srst        => user_reset or (not tcp_is_active),
+    srst        => user_reset or (not tcp_is_active) or recovery_rst,
 
     wr_en       => vital_valid,
     din         => vital_dout,
@@ -923,6 +920,7 @@ begin
         bbsPiSo           => bbs_piso,
 
         -- Status ports --
+        syncClk           => clk_sys,
         statusMzn         => status_mzn,
         statusBase        => status_base
 
