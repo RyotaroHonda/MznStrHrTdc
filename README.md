@@ -1,4 +1,4 @@
-# AMANEQ Mezzanine Streaming Low-Resolution Tdc (Str-LRTDC)
+# AMANEQ Mezzanine Streaming High-Resolution Tdc (Str-HRTDC)
 
 This is the firmware for the mezzanine card.
 This is for AMANEQ, not working with HUL.
